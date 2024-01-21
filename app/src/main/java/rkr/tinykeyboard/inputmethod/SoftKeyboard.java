@@ -30,6 +30,12 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.Toast;
+import android.os.Handler;
+import java.util.List;
+// import rkr.tinykeyboard.inputmethod.StatusBar;
+
+
 
 public class SoftKeyboard extends InputMethodService
         implements KeyboardView.OnKeyboardActionListener {
@@ -47,6 +53,29 @@ public class SoftKeyboard extends InputMethodService
     private LatinKeyboard mQwertyKeyboard;
     
     private LatinKeyboard mCurKeyboard;
+    private int cnt;
+    private boolean pressed = false;
+    private StatusBar status;
+    private Handler mHandler = new Handler();
+    private Runnable mKeyUpdateRunnable = new Runnable() {
+        @Override public void run() {
+            if (pressed) {
+                status.updateTime();
+                showStatus();
+            }
+            if (status != null)
+                mHandler.postDelayed(this, 1000); // Update keys every 1 second (1000 milliseconds)
+        }
+    };
+
+    public void showStatus() {
+        for (Keyboard.Key key : mInputView.getKeyboard().getKeys()) {
+            if (key.codes[0] == -3) {
+                key.label = status.toString();
+            }
+        }
+        mInputView.invalidateAllKeys();
+    }
 
     @Override public void onCreate() {
         super.onCreate();
@@ -82,6 +111,8 @@ public class SoftKeyboard extends InputMethodService
         mQwertyKeyboard = new LatinKeyboard(displayContext, R.xml.qwerty);
         mSymbolsKeyboard = new LatinKeyboard(displayContext, R.xml.symbols);
         mSymbolsShiftedKeyboard = new LatinKeyboard(displayContext, R.xml.symbols_shift);
+        pressed = false;
+        status = null;
     }
 
     @Override public View onCreateInputView() {
@@ -133,23 +164,28 @@ public class SoftKeyboard extends InputMethodService
         if (mInputView != null) {
             mInputView.closing();
         }
+        mCapsLock = false;
+        mInputView.setShifted(false);
     }
     
     @Override public void onStartInputView(EditorInfo attribute, boolean restarting) {
         super.onStartInputView(attribute, restarting);
         // Apply the selected keyboard to the input view.
+        View view = getWindow().getWindow().getDecorView();
+        view.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         setLatinKeyboard(mCurKeyboard);
         mInputView.closing();
     }
 
     private void updateShiftKeyState(EditorInfo attr) {
         if (attr != null && mInputView != null && mQwertyKeyboard == mInputView.getKeyboard()) {
-            int caps = 0;
-            EditorInfo ei = getCurrentInputEditorInfo();
-            if (ei != null && ei.inputType != InputType.TYPE_NULL) {
-                caps = getCurrentInputConnection().getCursorCapsMode(attr.inputType);
-            }
-            mInputView.setShifted(mCapsLock || caps != 0);
+            mInputView.setShifted(mCapsLock);
         }
     }
 
@@ -161,6 +197,15 @@ public class SoftKeyboard extends InputMethodService
     // Implementation of KeyboardViewListener
 
     public void onKey(int primaryCode, int[] keyCodes) {
+        // Update status bar
+        if (!pressed) {
+            pressed = true;
+            status = new StatusBar();
+            mHandler.postDelayed(mKeyUpdateRunnable, 1000);
+        }
+        status.update();
+        showStatus();
+       
         if (primaryCode == Keyboard.KEYCODE_DONE) {
             keyDownUp(KeyEvent.KEYCODE_ENTER);
         } else if (primaryCode == Keyboard.KEYCODE_DELETE) {
@@ -183,6 +228,7 @@ public class SoftKeyboard extends InputMethodService
     }
 
     public void onText(CharSequence text) {
+        Toast.makeText(getDisplayContext(), "onText", Toast.LENGTH_SHORT).show();
     }
     
     private void handleBackspace() {
@@ -210,7 +256,7 @@ public class SoftKeyboard extends InputMethodService
             mSymbolsKeyboard.setShifted(false);
         }
     }
-    
+
     private void handleCharacter(int primaryCode) {
         if (isInputViewShown()) {
             if (mInputView.isShifted()) {
@@ -242,10 +288,11 @@ public class SoftKeyboard extends InputMethodService
     private void checkToggleCapsLock() {
         long now = System.currentTimeMillis();
         if (mLastShiftTime + 800 > now) {
-            mCapsLock = !mCapsLock;
+            mCapsLock = true;
             mLastShiftTime = 0;
         } else {
             mLastShiftTime = now;
+            mCapsLock = false;
         }
     }
     

@@ -69,4 +69,7 @@
         <Key android:codes="8230" android:keyLabel="…"/>
         <Key android:codes="-4" android:keyLabel="@string/enter" android:keyWidth="@dimen/key_width_action"/>
     </Row>
+
+    <Row android:keyHeight="30dp">
+    </Row>
 </Keyboard>
